@@ -1,52 +1,36 @@
-#!/usr/bin/env python3
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import MetaData
+from sqlalchemy_serializer import SerializerMixin
 
-from flask import Flask, make_response, jsonify, session
-from flask_migrate import Migrate
+metadata = MetaData(naming_convention={
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+})
 
-from models import db, Article, User
+db = SQLAlchemy(metadata=metadata)
 
-app = Flask(__name__)
-app.secret_key = b'Y\xf1Xz\x00\xad|eQ\x80t \xca\x1a\x10K'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.json.compact = False
+class Article(db.Model, SerializerMixin):
+    __tablename__ = 'articles'
 
-migrate = Migrate(app, db)
+    id = db.Column(db.Integer, primary_key=True)
+    author = db.Column(db.String)
+    title = db.Column(db.String)
+    content = db.Column(db.String)
+    preview = db.Column(db.String)
+    minutes_to_read = db.Column(db.Integer)
+    date = db.Column(db.DateTime, server_default=db.func.now())
 
-db.init_app(app)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
-@app.route('/clear')
-def clear_session():
-    session['page_views'] = 0
-    return {'message': '200: Successfully cleared session data.'}, 200
+    def __repr__(self):
+        return f'Article {self.id} by {self.author}'
 
-@app.route('/articles')
-def index_articles():
+class User(db.Model, SerializerMixin):
+    __tablename__ = 'users'
 
-    pass
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String)
 
-@app.route('/articles/<int:id>', methods=['GET'])
-def show_article(id):
-    session['page_views'] = session.get('page_views', 0)
+    articles = db.relationship('Article', backref='user')
 
-    session['page_views'] += 1
-
-    if session['page_views'] <= 3:
-        article = Article.query.get(id)
-        if article:
-            return jsonify({
-                'title': article.title,
-                'content': article.content,
-                'author': article.author,
-                'preview': article.preview,
-                'minutes_to_read': article.minutes_to_read,
-                'date': article.date.strftime('%Y-%m-%d')  # Assuming date is a datetime object
-            }), 200
-        else:
-            return jsonify({'message': 'Article not found'}), 404
-    else:
-        return jsonify({'message': 'Maximum pageview limit reached'}), 401
-    pass
-
-if __name__ == '__main__':
-    app.run(port=5555)
+    def __repr__(self):
+        return f'User {self.name}, ID {self.id}'
